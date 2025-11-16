@@ -4,6 +4,7 @@ import React, { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, Loader2 } from 'lucide-react';
 import { storage, databases, ID, BUCKET_ID, DATABASE_ID, DOCUMENTS_COLLECTION_ID } from '@/lib/appwrite';
+import { addDocumentToSearch } from '@/lib/meilisearch';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,7 +39,7 @@ export default function FileUpload({ onUploadComplete, categoryId }: FileUploadP
     const processFile = async (file: File, uploadedFileId: string) => {
         try {
             // Create document record in database
-            await databases.createDocument(
+            const document = await databases.createDocument(
                 DATABASE_ID,
                 DOCUMENTS_COLLECTION_ID,
                 ID.unique(),
@@ -59,6 +60,9 @@ export default function FileUpload({ onUploadComplete, categoryId }: FileUploadP
                     updatedAt: new Date().toISOString(),
                 }
             );
+
+            // Add document to Meilisearch index
+            await addDocumentToSearch(document);
 
             return true;
         } catch (error) {

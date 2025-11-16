@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/contexts/AuthContext';
 import { databases, storage, Query, DATABASE_ID, DOCUMENTS_COLLECTION_ID, BUCKET_ID } from '@/lib/appwrite';
+import { searchDocuments, updateDocumentInSearch, deleteDocumentFromSearch, checkMeilisearchHealth } from '@/lib/meilisearch';
 import { Document, SearchFilters } from '@/types';
 import SearchBar from '@/components/SearchBar';
 import DocumentCard from '@/components/DocumentCard';
@@ -20,6 +21,8 @@ export default function DashboardPage() {
     const [showUpload, setShowUpload] = useState(false);
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
     const [filters, setFilters] = useState<SearchFilters>({});
+    const [useMeilisearch, setUseMeilisearch] = useState(true);
+    const [searchTime, setSearchTime] = useState<number>(0);
 
     useEffect(() => {
         if (!authLoading && !user) {
@@ -27,33 +30,89 @@ export default function DashboardPage() {
         }
     }, [user, authLoading, router]);
 
+    // Check if Meilisearch is available on mount
+    useEffect(() => {
+        const checkSearch = async () => {
+            const isAvailable = await checkMeilisearchHealth();
+            setUseMeilisearch(isAvailable);
+            // No need to log - checkMeilisearchHealth handles logging internally
+        };
+        checkSearch();
+    }, []);
+
     const fetchDocuments = async (searchFilters: SearchFilters = {}) => {
         try {
             setLoading(true);
-            const queries = [];
+            const startTime = performance.now();
 
-            // Build queries based on filters
-            if (searchFilters.query) {
-                queries.push(Query.search('title', searchFilters.query));
+            // Try Meilisearch first if available
+            if (useMeilisearch && searchFilters.query) {
+                const searchResults = await searchDocuments(searchFilters.query, {
+                    fileType: searchFilters.fileType,
+                    categoryId: searchFilters.categoryId,
+                    tags: searchFilters.tags,
+                });
+
+                const endTime = performance.now();
+                setSearchTime(searchResults.processingTimeMs || Math.round(endTime - startTime));
+
+                // Transform Meilisearch hits to Document format
+                const docs = searchResults.hits.map((hit: any) => ({
+                    $id: hit.id,
+                    $collectionId: DOCUMENTS_COLLECTION_ID,
+                    $databaseId: DATABASE_ID,
+                    $createdAt: new Date(hit.createdAt).toISOString(),
+                    $updatedAt: new Date(hit.createdAt).toISOString(),
+                    $permissions: [],
+                    $sequence: 0,
+                    title: hit.title,
+                    description: hit.description,
+                    fileName: hit.fileName,
+                    fileType: hit.fileType,
+                    fileSize: hit.fileSize,
+                    fileUrl: hit.fileUrl,
+                    fileId: hit.fileId,
+                    categoryId: hit.categoryId,
+                    tags: hit.tags,
+                    uploadedBy: hit.uploadedBy,
+                    views: hit.views,
+                    downloads: hit.downloads,
+                    createdAt: new Date(hit.createdAt).toISOString(),
+                    updatedAt: new Date(hit.createdAt).toISOString(),
+                    _highlightResult: hit._formatted, // For highlighting
+                }));
+
+                setDocuments(docs);
+            } else {
+                // Fallback to Appwrite search
+                const queries = [];
+
+                // Build queries based on filters
+                if (searchFilters.query) {
+                    queries.push(Query.search('title', searchFilters.query));
+                }
+                if (searchFilters.categoryId) {
+                    queries.push(Query.equal('categoryId', searchFilters.categoryId));
+                }
+                if (searchFilters.fileType) {
+                    queries.push(Query.equal('fileType', searchFilters.fileType));
+                }
+
+                // Order by most recent
+                queries.push(Query.orderDesc('$createdAt'));
+                queries.push(Query.limit(50));
+
+                const response = await databases.listDocuments(
+                    DATABASE_ID,
+                    DOCUMENTS_COLLECTION_ID,
+                    queries
+                );
+
+                const endTime = performance.now();
+                setSearchTime(Math.round(endTime - startTime));
+
+                setDocuments(response.documents as unknown as Document[]);
             }
-            if (searchFilters.categoryId) {
-                queries.push(Query.equal('categoryId', searchFilters.categoryId));
-            }
-            if (searchFilters.fileType) {
-                queries.push(Query.equal('fileType', searchFilters.fileType));
-            }
-
-            // Order by most recent
-            queries.push(Query.orderDesc('$createdAt'));
-            queries.push(Query.limit(50));
-
-            const response = await databases.listDocuments(
-                DATABASE_ID,
-                DOCUMENTS_COLLECTION_ID,
-                queries
-            );
-
-            setDocuments(response.documents as unknown as Document[]);
         } catch (error) {
             console.error('Error fetching documents:', error);
         } finally {
@@ -79,13 +138,20 @@ export default function DashboardPage() {
 
     const handleViewDocument = async (document: Document) => {
         try {
-            // Increment view count
+            const newViewCount = (document.views || 0) + 1;
+
+            // Increment view count in Appwrite
             await databases.updateDocument(
                 DATABASE_ID,
                 DOCUMENTS_COLLECTION_ID,
                 document.$id,
-                { views: (document.views || 0) + 1 }
+                { views: newViewCount }
             );
+
+            // Update Meilisearch
+            if (useMeilisearch) {
+                await updateDocumentInSearch(document.$id, { views: newViewCount });
+            }
 
             setSelectedDocument(document);
 
@@ -98,13 +164,20 @@ export default function DashboardPage() {
 
     const handleDownloadDocument = async (document: Document) => {
         try {
-            // Increment download count
+            const newDownloadCount = (document.downloads || 0) + 1;
+
+            // Increment download count in Appwrite
             await databases.updateDocument(
                 DATABASE_ID,
                 DOCUMENTS_COLLECTION_ID,
                 document.$id,
-                { downloads: (document.downloads || 0) + 1 }
+                { downloads: newDownloadCount }
             );
+
+            // Update Meilisearch
+            if (useMeilisearch) {
+                await updateDocumentInSearch(document.$id, { downloads: newDownloadCount });
+            }
 
             // Get download URL
             const result = storage.getFileDownload(BUCKET_ID, document.fileId);
@@ -131,12 +204,17 @@ export default function DashboardPage() {
             // Delete file from storage
             await storage.deleteFile(BUCKET_ID, document.fileId);
 
-            // Delete document record
+            // Delete document record from Appwrite
             await databases.deleteDocument(
                 DATABASE_ID,
                 DOCUMENTS_COLLECTION_ID,
                 document.$id
             );
+
+            // Delete from Meilisearch
+            if (useMeilisearch) {
+                await deleteDocumentFromSearch(document.$id);
+            }
 
             // Refresh documents
             fetchDocuments(filters);
@@ -209,7 +287,13 @@ export default function DashboardPage() {
                         <div className="flex items-center justify-between mb-4">
                             <p className="text-sm text-muted-foreground">
                                 {documents.length} document{documents.length !== 1 ? 's' : ''} found
+                                {searchTime > 0 && ` in ${searchTime}ms`}
                             </p>
+                            {useMeilisearch && (
+                                <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">
+                                    ⚡ Enhanced Search Active
+                                </span>
+                            )}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {documents.map((doc) => (
