@@ -9,6 +9,7 @@ import { Document, SearchFilters } from '@/types';
 import SearchBar from '@/components/SearchBar';
 import DocumentCard from '@/components/DocumentCard';
 import FileUpload from '@/components/FileUpload';
+import DocumentPreview from '@/components/DocumentPreview';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Loader2, Upload, LogOut, FileSearch } from 'lucide-react';
@@ -20,6 +21,7 @@ export default function DashboardPage() {
     const [loading, setLoading] = useState(true);
     const [showUpload, setShowUpload] = useState(false);
     const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
+    const [showPreview, setShowPreview] = useState(false);
     const [filters, setFilters] = useState<SearchFilters>({});
     const [useMeilisearch, setUseMeilisearch] = useState(true);
     const [searchTime, setSearchTime] = useState<number>(0);
@@ -153,10 +155,14 @@ export default function DashboardPage() {
                 await updateDocumentInSearch(document.$id, { views: newViewCount });
             }
 
-            setSelectedDocument(document);
+            // Update local state
+            setDocuments(prev => prev.map(d =>
+                d.$id === document.$id ? { ...d, views: newViewCount } : d
+            ));
 
-            // Open in new tab
-            window.open(document.fileUrl, '_blank');
+            // Show preview modal instead of opening in new tab
+            setSelectedDocument({ ...document, views: newViewCount });
+            setShowPreview(true);
         } catch (error) {
             console.error('Error viewing document:', error);
         }
@@ -296,15 +302,22 @@ export default function DashboardPage() {
                             )}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {documents.map((doc) => (
-                                <DocumentCard
-                                    key={doc.$id}
-                                    document={doc}
-                                    onView={handleViewDocument}
-                                    onDownload={handleDownloadDocument}
-                                    onDelete={handleDeleteDocument}
-                                />
-                            ))}
+                            {documents.map((doc) => {
+                                // Extract highlighted snippet from Meilisearch results
+                                const highlighted = (doc as any)._highlightResult;
+                                const snippet = highlighted?.content || highlighted?.description || highlighted?.title;
+
+                                return (
+                                    <DocumentCard
+                                        key={doc.$id}
+                                        document={doc}
+                                        onView={handleViewDocument}
+                                        onDownload={handleDownloadDocument}
+                                        onDelete={handleDeleteDocument}
+                                        highlightedSnippet={snippet}
+                                    />
+                                );
+                            })}
                         </div>
                     </div>
                 ) : (
@@ -333,6 +346,14 @@ export default function DashboardPage() {
                     <FileUpload onUploadComplete={handleUploadComplete} />
                 </DialogContent>
             </Dialog>
+
+            {/* Document Preview */}
+            <DocumentPreview
+                document={selectedDocument}
+                open={showPreview}
+                onClose={() => setShowPreview(false)}
+                onDownload={() => selectedDocument && handleDownloadDocument(selectedDocument)}
+            />
         </div>
     );
 }

@@ -5,6 +5,7 @@ import { useDropzone } from 'react-dropzone';
 import { Upload, File, X, Loader2 } from 'lucide-react';
 import { storage, databases, ID, BUCKET_ID, DATABASE_ID, DOCUMENTS_COLLECTION_ID } from '@/lib/appwrite';
 import { addDocumentToSearch } from '@/lib/meilisearch';
+import { extractFileContent, cleanContent, truncateContent } from '@/lib/extractors';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -38,14 +39,22 @@ export default function FileUpload({ onUploadComplete, categoryId }: FileUploadP
 
     const processFile = async (file: File, uploadedFileId: string) => {
         try {
-            // Create document record in database
+            // Extract text content from the file
+            console.log(`🔍 Extracting content from ${file.name}...`);
+            const extractedContent = await extractFileContent(file);
+            const cleanedContent = cleanContent(extractedContent);
+
+            console.log(`✅ Extracted ${cleanedContent.length} characters from ${file.name}`);
+
+            // Create document record in database with extracted content
             const document = await databases.createDocument(
                 DATABASE_ID,
                 DOCUMENTS_COLLECTION_ID,
                 ID.unique(),
                 {
                     title: title || file.name,
-                    description: description || '',
+                    description: description || truncateContent(cleanedContent, 200),
+                    content: cleanedContent, // Store full extracted content
                     fileId: uploadedFileId,
                     fileName: file.name,
                     fileSize: file.size,
@@ -61,7 +70,7 @@ export default function FileUpload({ onUploadComplete, categoryId }: FileUploadP
                 }
             );
 
-            // Add document to Meilisearch index
+            // Add document to Meilisearch index (includes content for search)
             await addDocumentToSearch(document);
 
             return true;

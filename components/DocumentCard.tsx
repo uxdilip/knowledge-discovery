@@ -12,13 +12,15 @@ interface DocumentCardProps {
     onView?: (document: Document) => void;
     onDownload?: (document: Document) => void;
     onDelete?: (document: Document) => void;
+    highlightedSnippet?: string; // HTML string with <mark> tags from Meilisearch
 }
 
 export default function DocumentCard({
     document,
     onView,
     onDownload,
-    onDelete
+    onDelete,
+    highlightedSnippet
 }: DocumentCardProps) {
     const handleView = () => {
         if (onView) onView(document);
@@ -47,7 +49,17 @@ export default function DocumentCard({
                             <h3 className="font-semibold text-sm line-clamp-2 group-hover:text-primary transition-colors">
                                 {document.title}
                             </h3>
-                            {document.description && (
+                            {highlightedSnippet ? (
+                                <div
+                                    className="text-xs text-muted-foreground mt-1 line-clamp-2"
+                                    dangerouslySetInnerHTML={{ __html: highlightedSnippet }}
+                                    style={{
+                                        // Style for highlighted text
+                                        '--mark-bg': 'rgb(var(--primary) / 0.2)',
+                                        '--mark-color': 'rgb(var(--primary))',
+                                    } as React.CSSProperties}
+                                />
+                            ) : document.description && (
                                 <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                                     {document.description}
                                 </p>
