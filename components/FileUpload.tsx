@@ -40,8 +40,10 @@ export default function FileUpload({ onUploadComplete, categoryId }: FileUploadP
     const processFile = async (file: File, uploadedFileId: string) => {
         try {
             // Extract text content from the file
-            console.log(`🔍 Extracting content from ${file.name}...`);
+            console.log(`🔍 Extracting content from ${file.name} (type: ${file.type}, size: ${file.size} bytes)...`);
             const extractedContent = await extractFileContent(file);
+            console.log(`📝 Raw extracted content length: ${extractedContent.length}`);
+            console.log(`📝 First 200 chars: ${extractedContent.substring(0, 200)}`);
             const cleanedContent = cleanContent(extractedContent);
 
             console.log(`✅ Extracted ${cleanedContent.length} characters from ${file.name}`);

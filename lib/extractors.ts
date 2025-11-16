@@ -18,14 +18,24 @@ export async function extractPDFContent(file: File): Promise<string> {
     }
 
     try {
+        console.log('📄 Starting PDF extraction...');
         // Dynamic import to avoid SSR issues with DOMMatrix
         const pdfjsLib = await import('pdfjs-dist');
+        console.log(`📄 PDF.js version: ${pdfjsLib.version}`);
 
-        // Configure PDF.js worker
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+        // Configure PDF.js worker - use the npm package's worker
+        // The worker needs to be served from the public directory or via CDN
+        if (typeof window !== 'undefined') {
+            // Use unpkg CDN with the correct .mjs extension for newer versions
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+            console.log(`📄 Worker URL: ${pdfjsLib.GlobalWorkerOptions.workerSrc}`);
+        }
 
         const arrayBuffer = await file.arrayBuffer();
+        console.log(`📄 Array buffer size: ${arrayBuffer.byteLength} bytes`);
+
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        console.log(`📄 PDF loaded, pages: ${pdf.numPages}`);
 
         let fullText = '';
 
@@ -37,16 +47,18 @@ export async function extractPDFContent(file: File): Promise<string> {
                 .map((item: any) => item.str)
                 .join(' ');
             fullText += pageText + '\n';
+            console.log(`📄 Page ${i}/${pdf.numPages}: ${pageText.length} characters`);
         }
 
+        console.log(`📄 Total extracted: ${fullText.trim().length} characters`);
         return fullText.trim();
     } catch (error) {
-        console.error('Error extracting PDF content:', error);
+        console.error('❌ Error extracting PDF content:', error);
+        console.error('❌ Error details:', error instanceof Error ? error.message : String(error));
+        console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
         return '';
     }
-}
-
-/**
+}/**
  * Extract text content from DOCX file
  */
 export async function extractDOCXContent(file: File): Promise<string> {

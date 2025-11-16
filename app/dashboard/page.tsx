@@ -290,18 +290,25 @@ export default function DashboardPage() {
                     </div>
                 ) : documents.length > 0 ? (
                     <div>
-                        <div className="flex items-center justify-between mb-4">
-                            <p className="text-sm text-muted-foreground">
-                                {documents.length} document{documents.length !== 1 ? 's' : ''} found
-                                {searchTime > 0 && ` in ${searchTime}ms`}
-                            </p>
+                        <div className="flex items-center justify-between mb-6">
+                            <div>
+                                <p className="text-sm font-medium text-foreground">
+                                    {documents.length} document{documents.length !== 1 ? 's' : ''} found
+                                </p>
+                                {searchTime > 0 && (
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Search completed in {searchTime}ms
+                                    </p>
+                                )}
+                            </div>
                             {useMeilisearch && (
-                                <span className="text-xs px-2 py-1 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded-full">
-                                    ⚡ Enhanced Search Active
+                                <span className="text-xs px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 rounded-full font-medium flex items-center gap-1.5">
+                                    <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                                    Enhanced Search
                                 </span>
                             )}
                         </div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                             {documents.map((doc) => {
                                 // Extract highlighted snippet from Meilisearch results
                                 const highlighted = (doc as any)._highlightResult;

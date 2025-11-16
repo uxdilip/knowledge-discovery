@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>PDF Content Extraction Test</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs" type="module"></script>
+</head>
+
+<body>
+    <h1>Test PDF Content Extraction</h1>
+    <input type="file" id="fileInput" accept=".pdf" />
+    <button onclick="testExtraction()">Extract Content</button>
+    <div id="output"></div>
+
+    <script type="module">
+        import * as pdfjsLib from 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs';
+
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+
+        window.testExtraction = async function () {
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+
+            if (!file) {
+                alert('Please select a PDF file');
+                return;
+            }
+
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>Extracting...</p>';
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                let fullText = '';
+                output.innerHTML += `<p>PDF has ${pdf.numPages} pages</p>`;
+
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    fullText += pageText + '\n';
+                    output.innerHTML += `<p>Page ${i}: ${pageText.length} characters</p>`;
+                }
+
+                output.innerHTML += `<h3>Total Content (${fullText.length} chars):</h3>`;
+                output.innerHTML += `<pre style="background: #f5f5f5; padding: 10px; max-height: 400px; overflow-y: auto;">${fullText}</pre>`;
+
+            } catch (error) {
+                output.innerHTML += `<p style="color: red;">Error: ${error.message}</p>`;
+                console.error(error);
+            }
+        };
+    </script>
+</body>
+
+</html>
