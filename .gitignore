@@ -39,3 +39,11 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# documentation (ignore all md files except README)
+*.md
+!README.md
+
+# setup scripts
+setup-appwrite.js
+fix-bucket.js
