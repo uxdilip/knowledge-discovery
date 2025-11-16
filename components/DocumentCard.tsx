@@ -43,7 +43,7 @@ export default function DocumentCard({
         >
             {/* Background gradient on hover */}
             <div className="absolute inset-0 bg-linear-to-br from-primary/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            
+
             <div className="relative p-5">
                 {/* Header with icon and actions */}
                 <div className="flex items-start justify-between mb-3">
@@ -52,7 +52,7 @@ export default function DocumentCard({
                         <div className="text-5xl group-hover:scale-110 transition-transform duration-300">
                             {getFileIcon(document.fileName)}
                         </div>
-                        
+
                         {/* File info */}
                         <div className="flex-1 min-w-0">
                             <h3 className="font-semibold text-base line-clamp-1 group-hover:text-primary transition-colors">
@@ -63,7 +63,7 @@ export default function DocumentCard({
                             </p>
                         </div>
                     </div>
-                    
+
                     {/* Action buttons - always visible on mobile, hover on desktop */}
                     <div className="flex items-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <Button
